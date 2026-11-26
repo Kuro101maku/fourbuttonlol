@@ -43,10 +43,26 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Android project located at: $PROJECT_DIR"
 
+      - name: Align Java and Kotlin JVM targets
+        run: |
+          cat > "$RUNNER_TEMP/force-jvm17.gradle" <<'GRADLE'
+          allprojects {
+            afterEvaluate {
+              tasks.withType(JavaCompile).configureEach {
+                sourceCompatibility = JavaVersion.VERSION_17.toString()
+                targetCompatibility = JavaVersion.VERSION_17.toString()
+              }
+              tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions.jvmTarget = "17"
+              }
+            }
+          }
+          GRADLE
+
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
-          gradle --no-daemon assembleDebug
+          gradle --no-daemon -I "$RUNNER_TEMP/force-jvm17.gradle" assembleDebug
 
       - name: Collect APK
         run: |
