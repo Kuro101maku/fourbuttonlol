@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "KuroAssistant_v12-v3.zip"
       - "KuroAssistant_v11.zip"
       - "KuroAssistant_v8.zip"
       - "KuroAssistant_v7.zip"
@@ -38,7 +39,9 @@ jobs:
       - name: Extract archive and prepare Android project
         shell: bash
         run: |
-          if [ -f "KuroAssistant_v11.zip" ]; then
+          if [ -f "KuroAssistant_v12-v3.zip" ]; then
+            ARCHIVE="KuroAssistant_v12-v3.zip"
+          elif [ -f "KuroAssistant_v11.zip" ]; then
             ARCHIVE="KuroAssistant_v11.zip"
           elif [ -f "KuroAssistant_v8.zip" ]; then
             ARCHIVE="KuroAssistant_v8.zip"
