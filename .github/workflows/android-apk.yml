@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "MainActivity-v2.zip"
       - "FourButtonPad_project.zip"
       - ".github/workflows/android-apk.yml"
   workflow_dispatch:
@@ -32,14 +33,28 @@ jobs:
 
       - name: Extract project archive
         run: |
-          unzip -q FourButtonPad_project.zip -d extracted
-          PROJECT_DIR="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Could not find settings.gradle or settings.gradle.kts in the ZIP."
-            echo "Archive contents:"
-            find extracted -maxdepth 4 -type f | head -100
+          if [ -f "MainActivity-v2.zip" ]; then
+            ARCHIVE="MainActivity-v2.zip"
+          elif [ -f "FourButtonPad_project.zip" ]; then
+            ARCHIVE="FourButtonPad_project.zip"
+          else
+            echo "No supported project ZIP found in repository root."
             exit 1
           fi
+
+          echo "Using project archive: $ARCHIVE"
+          mkdir -p extracted
+          unzip -q "$ARCHIVE" -d extracted
+
+          PROJECT_DIR="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Could not find settings.gradle or settings.gradle.kts."
+            echo "This archive may contain only source files instead of a complete Android/Gradle project."
+            echo "Archive contents:"
+            find extracted -maxdepth 6 -type f | head -150
+            exit 1
+          fi
+
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Android project located at: $PROJECT_DIR"
 
