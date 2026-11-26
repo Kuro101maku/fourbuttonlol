@@ -241,6 +241,33 @@ jobs:
             exit 1
           fi
 
+      - name: Restore missing rest-session state fields in v16 source
+        shell: bash
+        run: |
+          SOURCE="$(find "$PROJECT_DIR/app/src/main/java" -type f -name 'MainActivity.kt' -print -quit)"
+          if [ -z "$SOURCE" ]; then
+            echo "MainActivity.kt not found for rest-state compatibility patch."
+            exit 1
+          fi
+          python3 - "$SOURCE" <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          source = path.read_text()
+          fields = {
+              "restEnteredAtMs": "private var restEnteredAtMs: Long = 0L",
+              "restIdleNotifiedForSession": "private var restIdleNotifiedForSession: Boolean = false",
+          }
+          missing = [decl for name, decl in fields.items() if not re.search(r'\\b(?:var|val)\\s+' + re.escape(name) + r'\\b', source)]
+          if missing:
+              match = re.search(r'(class\\s+MainActivity\\b[^\\{]*\\{)', source)
+              if not match:
+                  raise SystemExit("Could not locate MainActivity class to add missing rest-session fields.")
+              source = source[:match.end()] + "\\n    " + "\\n    ".join(missing) + source[match.end():]
+              path.write_text(source)
+          print("Rest-session fields present:", ", ".join(fields))
+          PY
+          grep -n -E 'restEnteredAtMs|restIdleNotifiedForSession' "$SOURCE"
+
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
