@@ -1,0 +1,68 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "FourButtonPad_project.zip"
+      - ".github/workflows/android-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Extract project archive
+        run: |
+          unzip -q FourButtonPad_project.zip -d extracted
+          PROJECT_DIR="$(find extracted -type f \\( -name settings.gradle -o -name settings.gradle.kts \\) -print -quit | xargs -r dirname)"
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Could not find settings.gradle or settings.gradle.kts in the ZIP."
+            echo "Archive contents:"
+            find extracted -maxdepth 4 -type f | head -100
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project located at: $PROJECT_DIR"
+
+      - name: Build debug APK
+        run: |
+          cd "$PROJECT_DIR"
+          gradle --no-daemon assembleDebug
+
+      - name: Collect APK
+        run: |
+          mkdir -p apk
+          find "$PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec cp {} apk/ \\;
+          if [ -z "$(ls -A apk)" ]; then
+            echo "Build finished but no debug APK was found."
+            find "$PROJECT_DIR" -type f -path "*/build/outputs/*" -print
+            exit 1
+          fi
+          ls -lh apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: FourButtonPad-debug-apk
+          path: apk/*.apk
+          if-no-files-found: error
+          retention-days: 14
