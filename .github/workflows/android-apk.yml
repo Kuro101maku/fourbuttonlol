@@ -33,7 +33,7 @@ jobs:
       - name: Extract project archive
         run: |
           unzip -q FourButtonPad_project.zip -d extracted
-          PROJECT_DIR="$(find extracted -type f \\( -name settings.gradle -o -name settings.gradle.kts \\) -print -quit | xargs -r dirname)"
+          PROJECT_DIR="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \\) -print -quit | xargs -r dirname)"
           if [ -z "$PROJECT_DIR" ]; then
             echo "Could not find settings.gradle or settings.gradle.kts in the ZIP."
             echo "Archive contents:"
@@ -51,7 +51,7 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p apk
-          find "$PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec cp {} apk/ \\;
+          find "$PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec cp {} apk/ \;
           if [ -z "$(ls -A apk)" ]; then
             echo "Build finished but no debug APK was found."
             find "$PROJECT_DIR" -type f -path "*/build/outputs/*" -print
