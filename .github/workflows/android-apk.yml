@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "KuroAssistant_v7.zip"
       - "KuroAssistant_v4.zip"
       - "MainActivity-v2.zip"
       - "FourButtonPad_project.zip"
@@ -35,7 +36,9 @@ jobs:
       - name: Extract archive and prepare Android project
         shell: bash
         run: |
-          if [ -f "KuroAssistant_v4.zip" ]; then
+          if [ -f "KuroAssistant_v7.zip" ]; then
+            ARCHIVE="KuroAssistant_v7.zip"
+          elif [ -f "KuroAssistant_v4.zip" ]; then
             ARCHIVE="KuroAssistant_v4.zip"
           elif [ -f "MainActivity-v2.zip" ]; then
             ARCHIVE="MainActivity-v2.zip"
@@ -119,15 +122,15 @@ jobs:
           }
 
           android {
-              namespace = "$PACKAGE"
+              namespace = "__PACKAGE__"
               compileSdk = 35
 
               defaultConfig {
-                  applicationId = "$PACKAGE"
+                  applicationId = "__PACKAGE__"
                   minSdk = 23
                   targetSdk = 35
-                  versionCode = 4
-                  versionName = "4.0"
+                  versionCode = 7
+                  versionName = "7.0"
               }
 
               buildFeatures {
@@ -161,6 +164,7 @@ jobs:
               debugImplementation("androidx.compose.ui:ui-tooling")
           }
           APP
+            sed -i "s/__PACKAGE__/$PACKAGE/g" "$PROJECT_DIR/app/build.gradle.kts"
 
             if [ ! -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml" ]; then
               cat > "$PROJECT_DIR/app/src/main/AndroidManifest.xml" <<MANIFEST
