@@ -257,12 +257,12 @@ jobs:
               "restEnteredAtMs": "private var restEnteredAtMs: Long = 0L",
               "restIdleNotifiedForSession": "private var restIdleNotifiedForSession: Boolean = false",
           }
-          missing = [decl for name, decl in fields.items() if not re.search(r'\\b(?:var|val)\\s+' + re.escape(name) + r'\\b', source)]
+          missing = [decl for name, decl in fields.items() if not re.search(r'\b(?:var|val)\s+' + re.escape(name) + r'\b', source)]
           if missing:
-              match = re.search(r'(class\\s+MainActivity\\b[^\\{]*\\{)', source)
+              match = re.search(r'(class\s+MainActivity\b[^\{]*\{)', source)
               if not match:
                   raise SystemExit("Could not locate MainActivity class to add missing rest-session fields.")
-              source = source[:match.end()] + "\\n    " + "\\n    ".join(missing) + source[match.end():]
+              source = source[:match.end()] + "\n    " + "\n    ".join(missing) + source[match.end():]
               path.write_text(source)
           print("Rest-session fields present:", ", ".join(fields))
           PY
