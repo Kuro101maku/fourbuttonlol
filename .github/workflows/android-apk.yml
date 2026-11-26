@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "KuroAssistant_v11.zip"
       - "KuroAssistant_v8.zip"
       - "KuroAssistant_v7.zip"
       - "KuroAssistant_v4.zip"
@@ -37,7 +38,9 @@ jobs:
       - name: Extract archive and prepare Android project
         shell: bash
         run: |
-          if [ -f "KuroAssistant_v8.zip" ]; then
+          if [ -f "KuroAssistant_v11.zip" ]; then
+            ARCHIVE="KuroAssistant_v11.zip"
+          elif [ -f "KuroAssistant_v8.zip" ]; then
             ARCHIVE="KuroAssistant_v8.zip"
           elif [ -f "KuroAssistant_v7.zip" ]; then
             ARCHIVE="KuroAssistant_v7.zip"
@@ -132,8 +135,8 @@ jobs:
                   applicationId = "__PACKAGE__"
                   minSdk = 23
                   targetSdk = 35
-                  versionCode = 8
-                  versionName = "8.0"
+                  versionCode = 11
+                  versionName = "11.0"
               }
 
               buildFeatures {
