@@ -173,6 +173,11 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Prepared project: $PROJECT_DIR"
 
+      - name: Enable AndroidX
+        run: |
+          mkdir -p "$PROJECT_DIR"
+          printf '\nandroid.useAndroidX=true\n' >> "$PROJECT_DIR/gradle.properties"
+
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
