@@ -31,7 +31,8 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Extract project archive
+      - name: Extract archive and prepare Android project
+        shell: bash
         run: |
           if [ -f "MainActivity-v2.zip" ]; then
             ARCHIVE="MainActivity-v2.zip"
@@ -42,38 +43,140 @@ jobs:
             exit 1
           fi
 
-          echo "Using project archive: $ARCHIVE"
           mkdir -p extracted
           unzip -q "$ARCHIVE" -d extracted
-
           PROJECT_DIR="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)"
-          if [ -z "$PROJECT_DIR" ]; then
-            echo "Could not find settings.gradle or settings.gradle.kts."
-            echo "This archive may contain only source files instead of a complete Android/Gradle project."
-            echo "Archive contents:"
-            find extracted -maxdepth 6 -type f | head -150
-            exit 1
+
+          # If the ZIP is a complete Android project, use it unchanged.
+          if [ -n "$PROJECT_DIR" ]; then
+            echo "Using complete Android project: $PROJECT_DIR"
+          else
+            # Gemini's v2 ZIP may contain just MainActivity.kt. Wrap it in a
+            # minimal Gradle Android/Compose project, as done for the earlier TXT source.
+            SOURCE="$(find extracted -type f -name MainActivity.kt -print -quit)"
+            if [ -z "$SOURCE" ]; then
+              echo "No Gradle project and no MainActivity.kt found in archive."
+              find extracted -maxdepth 6 -type f -print
+              exit 1
+            fi
+
+            echo "Source-only archive detected: $SOURCE"
+            sed -n '1,100p' "$SOURCE"
+
+            PACKAGE="$(grep -m1 -E '^\s*package\s+' "$SOURCE" | sed -E 's/^\s*package\s+([^ ;]+).*$/\1/' || true)"
+            if [ -z "$PACKAGE" ]; then
+              PACKAGE="com.kuro.fourbuttonpad"
+            fi
+            PACKAGE_PATH="$(echo "$PACKAGE" | tr '.' '/')"
+
+            PROJECT_DIR="android-project"
+            mkdir -p "$PROJECT_DIR/app/src/main/java/$PACKAGE_PATH"
+            cp "$SOURCE" "$PROJECT_DIR/app/src/main/java/$PACKAGE_PATH/MainActivity.kt"
+
+            cat > "$PROJECT_DIR/settings.gradle.kts" <<'SETTINGS'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "FourButtonPad"
+          include(":app")
+          SETTINGS
+
+            cat > "$PROJECT_DIR/build.gradle.kts" <<'ROOT'
+          plugins {
+              id("com.android.application") version "8.6.1" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          ROOT
+
+            cat > "$PROJECT_DIR/app/build.gradle.kts" <<'APP'
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+
+          android {
+              namespace = "com.kuro.fourbuttonpad"
+              compileSdk = 35
+
+              defaultConfig {
+                  applicationId = "com.kuro.fourbuttonpad"
+                  minSdk = 23
+                  targetSdk = 35
+                  versionCode = 2
+                  versionName = "2.0"
+              }
+
+              buildFeatures {
+                  compose = true
+              }
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = "17"
+              }
+          }
+
+          dependencies {
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material")
+              implementation("androidx.compose.material:material-icons-extended")
+
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          APP
+
+            cat > "$PROJECT_DIR/app/src/main/AndroidManifest.xml" <<MANIFEST
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:allowBackup="true"
+                  android:label="Four Button Pad"
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity
+                      android:name="$PACKAGE.MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          MANIFEST
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project located at: $PROJECT_DIR"
-
-      - name: Align Kotlin JVM target with Android Java target
-        run: |
-          cat > "$RUNNER_TEMP/force-jvm18.gradle" <<'GRADLE'
-          allprojects {
-            afterEvaluate {
-              tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
-                kotlinOptions.jvmTarget = "1.8"
-              }
-            }
-          }
-          GRADLE
+          echo "Prepared project: $PROJECT_DIR"
 
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
-          gradle --no-daemon -I "$RUNNER_TEMP/force-jvm18.gradle" assembleDebug
+          gradle --no-daemon assembleDebug
 
       - name: Collect APK
         run: |
