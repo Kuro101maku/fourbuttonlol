@@ -58,7 +58,7 @@ jobs:
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
-          gradle --no-daemon -I "$RUNNER_TEMP/force-jvm17.gradle" assembleDebug
+          gradle --no-daemon -I "$RUNNER_TEMP/force-jvm18.gradle" assembleDebug
 
       - name: Collect APK
         run: |
