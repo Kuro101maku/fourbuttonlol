@@ -176,7 +176,10 @@ jobs:
       - name: Enable AndroidX
         run: |
           mkdir -p "$PROJECT_DIR"
-          printf '\nandroid.useAndroidX=true\n' >> "$PROJECT_DIR/gradle.properties"
+          cat >> "$PROJECT_DIR/gradle.properties" <<'PROPS'
+          android.useAndroidX=true
+          org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8
+          PROPS
 
       - name: Build debug APK
         run: |
