@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "KuroAssistant_v4.zip"
       - "MainActivity-v2.zip"
       - "FourButtonPad_project.zip"
       - ".github/workflows/android-apk.yml"
@@ -34,7 +35,9 @@ jobs:
       - name: Extract archive and prepare Android project
         shell: bash
         run: |
-          if [ -f "MainActivity-v2.zip" ]; then
+          if [ -f "KuroAssistant_v4.zip" ]; then
+            ARCHIVE="KuroAssistant_v4.zip"
+          elif [ -f "MainActivity-v2.zip" ]; then
             ARCHIVE="MainActivity-v2.zip"
           elif [ -f "FourButtonPad_project.zip" ]; then
             ARCHIVE="FourButtonPad_project.zip"
