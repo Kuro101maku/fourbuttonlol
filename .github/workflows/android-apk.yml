@@ -267,6 +267,8 @@ jobs:
           print("Rest-session fields present:", ", ".join(fields))
           PY
           grep -n -E 'restEnteredAtMs|restIdleNotifiedForSession' "$SOURCE"
+          echo "---- MainActivity context 680-830 ----"
+          nl -ba "$SOURCE" | sed -n '680,830p'
 
       - name: Build debug APK
         run: |
