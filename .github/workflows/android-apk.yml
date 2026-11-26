@@ -205,12 +205,22 @@ jobs:
       - name: Set APK version to 16
         shell: bash
         run: |
-          BUILD_FILE="$(find "$PROJECT_DIR/app" -maxdepth 2 -type f \\( -name 'build.gradle' -o -name 'build.gradle.kts' \\) -print -quit)"
+          BUILD_FILE="$(find "$PROJECT_DIR/app" -maxdepth 2 -type f -name 'build.gradle*' -print -quit)"
           if [ -z "$BUILD_FILE" ]; then
             echo "Could not find app Gradle build file."
             exit 1
           fi
-          sed -i -E 's/versionCode[[:space:]]+[0-9]+/versionCode 16/g; s/versionName[[:space:]]+["\\x27][^"\\x27]*["\\x27]/versionName "16"/g' "$BUILD_FILE"
+          python3 - "$BUILD_FILE" <<'PY'
+          import pathlib, re, sys
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text()
+          text, code_count = re.subn(r'versionCode\\s*(?:=\\s*)?\\d+', 'versionCode = 16', text, count=1)
+          text, name_count = re.subn(r'versionName\\s*(?:=\\s*)?["\\'][^"\\']*["\\']', 'versionName = "16"', text, count=1)
+          if not code_count or not name_count:
+              raise SystemExit("Could not update versionCode/versionName in " + str(path))
+          path.write_text(text)
+          print("Set versionCode=16 and versionName=16 in", path)
+          PY
           grep -n -E 'versionCode|versionName' "$BUILD_FILE"
 
       - name: Enable AndroidX
