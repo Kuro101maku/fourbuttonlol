@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "KuroAssistant_v16.zip"
       - "KuroAssistant_v12-v3.zip"
       - "KuroAssistant_v11.zip"
       - "KuroAssistant_v8.zip"
@@ -39,7 +40,9 @@ jobs:
       - name: Extract archive and prepare Android project
         shell: bash
         run: |
-          if [ -f "KuroAssistant_v12-v3.zip" ]; then
+          if [ -f "KuroAssistant_v16.zip" ]; then
+            ARCHIVE="KuroAssistant_v16.zip"
+          elif [ -f "KuroAssistant_v12-v3.zip" ]; then
             ARCHIVE="KuroAssistant_v12-v3.zip"
           elif [ -f "KuroAssistant_v11.zip" ]; then
             ARCHIVE="KuroAssistant_v11.zip"
@@ -198,6 +201,17 @@ jobs:
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Prepared project: $PROJECT_DIR"
+
+      - name: Set APK version to 16
+        shell: bash
+        run: |
+          BUILD_FILE="$(find "$PROJECT_DIR/app" -maxdepth 2 -type f \\( -name 'build.gradle' -o -name 'build.gradle.kts' \\) -print -quit)"
+          if [ -z "$BUILD_FILE" ]; then
+            echo "Could not find app Gradle build file."
+            exit 1
+          fi
+          sed -i -E 's/versionCode[[:space:]]+[0-9]+/versionCode 16/g; s/versionName[[:space:]]+["\\x27][^"\\x27]*["\\x27]/versionName "16"/g' "$BUILD_FILE"
+          grep -n -E 'versionCode|versionName' "$BUILD_FILE"
 
       - name: Enable AndroidX
         run: |
