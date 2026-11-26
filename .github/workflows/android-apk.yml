@@ -43,19 +43,13 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Android project located at: $PROJECT_DIR"
 
-      - name: Align Java and Kotlin JVM targets
+      - name: Align Kotlin JVM target with Android Java target
         run: |
-          cat > "$RUNNER_TEMP/force-jvm17.gradle" <<'GRADLE'
-          import org.gradle.api.tasks.compile.JavaCompile
-
+          cat > "$RUNNER_TEMP/force-jvm18.gradle" <<'GRADLE'
           allprojects {
             afterEvaluate {
-              tasks.withType(JavaCompile).configureEach {
-                sourceCompatibility = JavaVersion.VERSION_17.toString()
-                targetCompatibility = JavaVersion.VERSION_17.toString()
-              }
               tasks.matching { it.name.startsWith("compile") && it.name.endsWith("Kotlin") }.configureEach {
-                kotlinOptions.jvmTarget = "17"
+                kotlinOptions.jvmTarget = "1.8"
               }
             }
           }
