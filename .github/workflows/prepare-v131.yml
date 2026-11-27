@@ -29,8 +29,7 @@ jobs:
           rm -rf /tmp/kuro131
           mkdir -p /tmp/kuro131/src
           unzip -q "$SOURCE" -d /tmp/kuro131/src
-          git apply --recount --check patches/v131-game-log.patch
-          git apply --recount patches/v131-game-log.patch
+          python3 patches/apply_v131.py /tmp/kuro131/src
           # Preserve the v30 source under a semantic version name and clean older ZIPs.
           if [ -f KuroAssistant_v_30.zip ]; then
             git mv KuroAssistant_v_30.zip KuroAssistant_v_1.30.zip
