@@ -101,6 +101,27 @@ jobs:
             echo "::error::Package mismatch: expected $PACKAGE but source declares $ACTUAL_PACKAGE"
             exit 1
           fi
+          # Minimal Kotlin string-escape repair for the v31 compiler errors.
+          # Only inspect the reported area; preserve already escaped sequences.
+          python3 - "$SOURCE" <<'PY'
+          import pathlib,re,sys
+          p=pathlib.Path(sys.argv[1])
+          lines=p.read_text().splitlines(True)
+          changed=[]
+          for i in range(4744, min(4757, len(lines))):
+              old=lines[i]
+              # Kotlin supports \\t, \\b, \\n, \\r, quotes, backslash, dollar and \\uXXXX.
+              new=re.sub(r'(?<!\\\\)\\\\([^\\\\\"btnr$u])',
+                          lambda m: '\\\\\\\\'+m.group(1), old)
+              if new != old:
+                  lines[i]=new
+                  changed.append(i+1)
+          if changed:
+              p.write_text("".join(lines))
+              print("Escaped unsupported Kotlin string escapes on lines:", changed)
+          else:
+              print("No unsupported escape patterns found in the previously reported lines.")
+          PY
           python3 - "$SOURCE" <<'PY'
           import pathlib,re,sys
           p=pathlib.Path(sys.argv[1]); s=p.read_text()
