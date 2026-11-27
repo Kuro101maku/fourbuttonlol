@@ -101,31 +101,51 @@ jobs:
             echo "::error::Package mismatch: expected $PACKAGE but source declares $ACTUAL_PACKAGE"
             exit 1
           fi
-          # Minimal Kotlin string-escape repair for the v31 compiler errors.
-          # Only inspect the previously reported lines; preserve already escaped sequences.
+          # Repair unsupported escapes inside ordinary Kotlin string literals.
+          # Scan the full source because later build-time edits can shift line numbers.
           python3 - "$SOURCE" <<'PY'
           import pathlib,sys
-          p=pathlib.Path(sys.argv[1])
-          lines=p.read_text().splitlines(True)
-          changed=[]
-          valid=set("tbnr'\"\\$u")
-          for i in range(4744, min(4757, len(lines))):
-              line=lines[i]
-              out=[]
-              j=0
-              while j < len(line):
-                  ch=line[j]
-                  if ch=="\\" and j+1<len(line) and line[j+1] not in valid and (j==0 or line[j-1]!="\\"):
-                      out.append("\\\\")
-                      changed.append(i+1)
-                  out.append(ch)
-                  j+=1
-              lines[i]="".join(out)
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          valid=set("tbnr'"\"\\$u")
+          out=[]; i=0; state="code"; changed=[]
+          while i<len(s):
+              c=s[i]; n=s[i+1] if i+1<len(s) else ""
+              if state=="code":
+                  if c=="/" and n=="/": state="line_comment"; out.extend((c,n)); i+=2; continue
+                  if c=="/" and n=="*": state="block_comment"; out.extend((c,n)); i+=2; continue
+                  if c=='"':
+                      if s[i:i+3]=='"""': state="raw"; out.append('"""'); i+=3; continue
+                      state="string"; out.append(c); i+=1; continue
+                  if c=="'": state="char"; out.append(c); i+=1; continue
+                  out.append(c); i+=1; continue
+              if state=="line_comment":
+                  out.append(c); i+=1
+                  if c=="\n": state="code"
+                  continue
+              if state=="block_comment":
+                  if c=="*" and n=="/": out.extend((c,n)); i+=2; state="code"; continue
+                  out.append(c); i+=1; continue
+              if state=="raw":
+                  if s[i:i+3]=='"""': out.append('"""'); i+=3; state="code"; continue
+                  out.append(c); i+=1; continue
+              if state=="string":
+                  if c=="\\":
+                      if n and n not in valid:
+                          out.append("\\\\"); changed.append(s.count("\n",0,i)+1)
+                      out.append(c); i+=1
+                      if i<len(s): out.append(s[i]); i+=1
+                      continue
+                  out.append(c); i+=1
+                  if c=='"': state="code"
+                  continue
+              if state=="char":
+                  if c=="\\": out.append(c); i+=1
+                  if i<len(s): out.append(s[i]); i+=1
+                  if c=="'": state="code"
           if changed:
-              p.write_text("".join(lines))
-              print("Escaped unsupported Kotlin string escapes on lines:", sorted(set(changed)))
-          else:
-              print("No unsupported escape patterns found in the previously reported lines.")
+              p.write_text("".join(out))
+              print("Escaped unsupported Kotlin string escapes on source lines:", sorted(set(changed)))
+          else: print("No unsupported Kotlin string escapes found.")
           PY
           python3 - "$SOURCE" <<'PY'
           import pathlib,re,sys
