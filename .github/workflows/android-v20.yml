@@ -158,3 +158,5 @@ jobs:
           path: apk/*.apk
           if-no-files-found: error
           retention-days: 14
+
+# Trigger v20 build after workflow registration.
