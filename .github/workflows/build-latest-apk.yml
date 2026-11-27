@@ -38,8 +38,8 @@ jobs:
             echo "::error::Timestamp exceeds Android versionCode limit"; exit 1
           fi
           BASE="$(basename "$SOURCE_ZIP")"
-          if [[ "$BASE" =~ [vV][_ -]?([0-9]+) ]]; then
-            VERSION_NAME="0.${BASH_REMATCH[1]}"
+          if [[ "$BASE" =~ [vV]([_-]?)([0-9]+) ]]; then
+            VERSION_NAME="0.${BASH_REMATCH[2]}"
           else
             VERSION_NAME="$(date -u -d "@$ADD_TIMESTAMP" +%Y.%m.%d.%H%M)"
           fi
