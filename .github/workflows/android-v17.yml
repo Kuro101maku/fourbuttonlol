@@ -132,8 +132,9 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p apk
-          find "$PROJECT_DIR" -type f -path "*/build/outputs/apk/debug/*.apk" -exec cp {} apk/ ;
-          test -n "$(ls -A apk)"
+          APK="$(find "$PROJECT_DIR" -type f -name "*.apk" -path "*/build/outputs/*" -print -quit)"
+          test -n "$APK" || { echo "APK not found in build outputs"; find "$PROJECT_DIR" -type f -path "*/build/outputs/*" -print; exit 1; }
+          cp "$APK" apk/
           ls -lh apk
       - uses: actions/upload-artifact@v4
         with:
