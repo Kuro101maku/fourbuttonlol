@@ -1,0 +1,36 @@
+name: Inspect v27 archive instructions
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-v27-archive.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read every TXT file from v27 ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -l KuroAssistant_v27.zip
+          mkdir extracted
+          unzip -q KuroAssistant_v27.zip -d extracted
+          mapfile -d '' TXTFILES < <(find extracted -type f -iname '*.txt' -print0)
+          if [ "${#TXTFILES[@]}" -eq 0 ]; then
+            echo "NO TXT FILES FOUND"
+            exit 2
+          fi
+          for f in "${TXTFILES[@]}"; do
+            echo
+            echo "================ TXT FILE: $f ================"
+            cat "$f"
+            echo
+            echo "================ END TXT FILE ================"
+          done
+          echo
+          echo "Archive files:"
+          find extracted -type f -printf '%p (%s bytes)\n' | sort
