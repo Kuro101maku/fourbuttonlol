@@ -169,7 +169,7 @@ jobs:
               lines=s.splitlines(True)
               i=next((i for i,line in enumerate(lines) if line.startswith("package ")),None)
               if i is None: raise SystemExit("Package declaration not found")
-              lines.insert(i+1,"\\nimport androidx.compose.ui.graphics.graphicsLayer\\n")
+              lines.insert(i+1,"\nimport androidx.compose.ui.graphics.graphicsLayer\n")
               p.write_text("".join(lines))
               print("Added graphicsLayer import.")
           PY
