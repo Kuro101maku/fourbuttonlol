@@ -1,0 +1,234 @@
+name: Build signed APK from latest added archive
+on:
+  push:
+    branches: [main]
+    paths:
+      - "*.zip"
+      - ".github/workflows/build-latest-apk.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Find newest archive by first-added commit date
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_ZIP=""
+          ADD_COMMIT=""
+          while IFS= read -r commit; do
+            added="$(git diff-tree --no-commit-id --name-only -r --diff-filter=A "$commit" -- '*.zip' | head -n 1)"
+            if [ -n "$added" ]; then
+              SOURCE_ZIP="$added"
+              ADD_COMMIT="$commit"
+              break
+            fi
+          done < <(git log --diff-filter=A --format='%H' -- '*.zip')
+          test -n "$SOURCE_ZIP" || { echo "::error::No ZIP archive found in repository history"; exit 1; }
+          ADD_TIMESTAMP="$(git show -s --format=%ct "$ADD_COMMIT")"
+          # Timestamp-based versionCode remains monotonic and does not depend on archive naming.
+          VERSION_CODE="$ADD_TIMESTAMP"
+          if [ "$VERSION_CODE" -gt 2100000000 ]; then
+            echo "::error::Timestamp exceeds Android versionCode limit"; exit 1
+          fi
+          BASE="$(basename "$SOURCE_ZIP")"
+          if [[ "$BASE" =~ [vV][_ -]?([0-9]+) ]]; then
+            VERSION_NAME="0.${BASH_REMATCH[1]}"
+          else
+            VERSION_NAME="$(date -u -d "@$ADD_TIMESTAMP" +%Y.%m.%d.%H%M)"
+          fi
+          echo "source_zip=$SOURCE_ZIP" >> "$GITHUB_OUTPUT"
+          echo "add_commit=$ADD_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "Selected archive: $SOURCE_ZIP"
+          echo "Added at: $(date -u -d "@$ADD_TIMESTAMP" --iso-8601=seconds)"
+          echo "App version: $VERSION_NAME (code $VERSION_CODE)"
+      - name: Verify persistent signing secrets
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::Missing signing secret $name"; exit 1; }
+          done
+          echo "All signing secrets are configured."
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Prepare Android project
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SOURCE_ZIP: ${{ steps.source.outputs.source_zip }}
+          VERSION_CODE: ${{ steps.source.outputs.version_code }}
+          VERSION_NAME: ${{ steps.source.outputs.version_name }}
+        run: |
+          set -euo pipefail
+          mkdir extracted
+          unzip -q "$SOURCE_ZIP" -d extracted
+          SOURCE="$(find extracted -type f -name MainActivity.kt -print -quit)"
+          test -n "$SOURCE" || { echo "::error::MainActivity.kt not found in selected archive"; find extracted -maxdepth 6 -type f; exit 1; }
+          PACKAGE="com.example.fourbuttonpad"
+          PACKAGE_PATH="$(echo "$PACKAGE" | tr '.' '/')"
+          PROJECT_DIR=android-project
+          mkdir -p "$PROJECT_DIR/app/src/main/java/$PACKAGE_PATH"
+          if [ -d extracted/app/src/main ]; then
+            cp -R extracted/app/src/main/. "$PROJECT_DIR/app/src/main/"
+          else
+            cp "$SOURCE" "$PROJECT_DIR/app/src/main/java/$PACKAGE_PATH/MainActivity.kt"
+          fi
+          SOURCE="$(find "$PROJECT_DIR/app/src/main/java" -type f -name MainActivity.kt -print -quit)"
+          ACTUAL_PACKAGE="$(grep -m1 -E '^\s*package\s+' "$SOURCE" | sed -E 's/^\s*package\s+([^ ;]+).*$/\1/' || true)"
+          if [ "$ACTUAL_PACKAGE" != "$PACKAGE" ]; then
+            echo "::error::Package mismatch: expected $PACKAGE but source declares $ACTUAL_PACKAGE"
+            exit 1
+          fi
+          python3 - "$SOURCE" <<'PY'
+          import pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          pattern=r'(?m)^\s*var restEnteredAtMs by remember \{\n\s*mutableStateOf\(if \(initialState\.mode == PadMode\.REST\) System\.currentTimeMillis\(\) else 0L\)\n\s*\}\n\s*var restIdleNotifiedForSession by remember \{ mutableStateOf\(false\) \}'
+          m=re.search(pattern,s)
+          if m:
+              block=m.group(0); s=s[:m.start()]+s[m.end():]
+              target=re.search(r'(?m)^\s*fun applyModeSelection\(chosen: PadMode\)',s)
+              if not target: raise SystemExit("Found state block but no applyModeSelection target.")
+              s=s[:target.start()]+block+"\n\n"+s[target.start():]
+              print("Moved Compose state before local function.")
+          p.write_text(s)
+          PY
+          python3 - "$SOURCE" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          if "cancelChildren(" in s and "import kotlinx.coroutines.cancelChildren" not in s:
+              lines=s.splitlines(True)
+              i=next((i for i,line in enumerate(lines) if line.startswith("package ")),None)
+              if i is None: raise SystemExit("Package declaration not found")
+              lines.insert(i+1,"\nimport kotlinx.coroutines.cancelChildren\n")
+              p.write_text("".join(lines))
+              print("Added cancelChildren import.")
+          PY
+          cat > "$PROJECT_DIR/settings.gradle.kts" <<'SETTINGS'
+          pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories { google(); mavenCentral() }
+          }
+          rootProject.name = "FourButtonPad"
+          include(":app")
+          SETTINGS
+          cat > "$PROJECT_DIR/build.gradle.kts" <<'ROOT'
+          plugins {
+              id("com.android.application") version "8.6.1" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+          }
+          ROOT
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$PROJECT_DIR/keystore.jks"
+          cat > "$PROJECT_DIR/app/build.gradle.kts" <<APP
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+          }
+          android {
+              namespace = "com.example.fourbuttonpad"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.example.fourbuttonpad"
+                  minSdk = 23
+                  targetSdk = 35
+                  versionCode = $VERSION_CODE
+                  versionName = "$VERSION_NAME"
+              }
+              signingConfigs {
+                  create("release") {
+                      storeFile = rootProject.file("keystore.jks")
+                      storePassword = System.getenv("KEYSTORE_PASSWORD")
+                      keyAlias = System.getenv("KEY_ALIAS")
+                      keyPassword = System.getenv("KEY_PASSWORD")
+                  }
+              }
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("release")
+                      isMinifyEnabled = false
+                  }
+              }
+              buildFeatures { compose = true }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = "17" }
+          }
+          dependencies {
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.activity:activity-compose:1.10.0")
+              implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+              implementation("androidx.appcompat:appcompat:1.7.0")
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material")
+              implementation("androidx.compose.material:material-icons-extended")
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          APP
+          if [ ! -f "$PROJECT_DIR/app/src/main/AndroidManifest.xml" ]; then
+            cat > "$PROJECT_DIR/app/src/main/AndroidManifest.xml" <<'MANIFEST'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <application android:allowBackup="true" android:label="Помощник Куро" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+              <activity android:name="com.example.fourbuttonpad.MainActivity" android:exported="true">
+                <intent-filter>
+                  <action android:name="android.intent.action.MAIN"/>
+                  <category android:name="android.intent.category.LAUNCHER"/>
+                </intent-filter>
+              </activity>
+            </application>
+          </manifest>
+          MANIFEST
+          fi
+          printf '\nandroid.useAndroidX=true\norg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8\n' >> "$PROJECT_DIR/gradle.properties"
+          find "$PROJECT_DIR/app/src/main/res" -type f -name '*.xml' -print0 | xargs -0 -r sed -i -E 's/[[:space:]]+android:pathType="[^"]*"//g'
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+      - name: Build signed release APK
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: cd "$PROJECT_DIR" && gradle --no-daemon assembleRelease
+      - name: Collect and verify signed APK
+        run: |
+          set -euo pipefail
+          mkdir -p apk
+          APK="$(find "$PROJECT_DIR" -type f -name "*.apk" -path "*/build/outputs/*" -print -quit)"
+          test -n "$APK" || { echo "::error::APK not found"; exit 1; }
+          cp "$APK" apk/KuroAssistant_latest.apk
+          test -s apk/KuroAssistant_latest.apk
+          ls -lh apk/KuroAssistant_latest.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KuroAssistant-latest-signed-APK
+          path: apk/KuroAssistant_latest.apk
+          if-no-files-found: error
+          retention-days: 14
