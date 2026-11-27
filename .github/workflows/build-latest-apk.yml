@@ -165,7 +165,7 @@ jobs:
           python3 - "$SOURCE" <<'PY'
           import pathlib,sys
           p=pathlib.Path(sys.argv[1]); s=p.read_text()
-          if "graphicsLayer(" in s and "import androidx.compose.ui.graphics.graphicsLayer" not in s:
+          if "graphicsLayer" in s and "import androidx.compose.ui.graphics.graphicsLayer" not in s:
               lines=s.splitlines(True)
               i=next((i for i,line in enumerate(lines) if line.startswith("package ")),None)
               if i is None: raise SystemExit("Package declaration not found")
