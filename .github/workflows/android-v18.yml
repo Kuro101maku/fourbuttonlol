@@ -56,6 +56,20 @@ jobs:
               print("v18 does not contain the old v16 state block; no scope patch needed.")
           p.write_text(s)
           PY
+          # v18 uses Job.cancelChildren(); ensure its coroutine extension is imported.
+          python3 - "$SOURCE" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          if "cancelChildren(" in s and "import kotlinx.coroutines.cancelChildren" not in s:
+              lines=s.splitlines(True)
+              package_index=next((i for i,line in enumerate(lines) if line.startswith("package ")),None)
+              if package_index is None: raise SystemExit("Package declaration not found for coroutine import patch")
+              lines.insert(package_index+1,"\nimport kotlinx.coroutines.cancelChildren\n")
+              s="".join(lines); p.write_text(s)
+              print("Added kotlinx.coroutines.cancelChildren import.")
+          else:
+              print("cancelChildren import already present or unused.")
+          PY
           cat > "$PROJECT_DIR/settings.gradle.kts" <<'SETTINGS'
           pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
           dependencyResolutionManagement {
