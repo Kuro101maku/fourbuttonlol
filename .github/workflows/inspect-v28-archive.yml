@@ -16,9 +16,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          unzip -l KuroAssistant_v28.zip
+          unzip -l 'KuroAssistant_v28 (1).zip'
           mkdir extracted
-          unzip -q KuroAssistant_v28.zip -d extracted
+          unzip -q 'KuroAssistant_v28 (1).zip' -d extracted
           mapfile -d '' TXTFILES < <(find extracted -type f -iname '*.txt' -print0)
           if [ "${#TXTFILES[@]}" -eq 0 ]; then
             echo "NO TXT FILES FOUND"
