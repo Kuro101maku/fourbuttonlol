@@ -4,7 +4,7 @@ on:
     branches: [main]
     paths:
       - "KuroAssistant_v28 (1).zip"
-      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/build-v28-apk.yml"
   workflow_dispatch:
 permissions:
   contents: read
