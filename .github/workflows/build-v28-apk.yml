@@ -1,9 +1,9 @@
-name: Build signed Android v28 APK
+name: Build signed Android v28(2) APK
 on:
   push:
     branches: [main]
     paths:
-      - "KuroAssistant_v28 (1).zip"
+      - "KuroAssistant_v28 (2).zip"
       - ".github/workflows/build-v28-apk.yml"
   workflow_dispatch:
 permissions:
@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir extracted
-          unzip -q 'KuroAssistant_v28 (1).zip' -d extracted
+          unzip -q 'KuroAssistant_v28 (2).zip' -d extracted
           SOURCE="$(find extracted -type f -name MainActivity.kt -print -quit)"
           test -n "$SOURCE" || { echo "No MainActivity.kt found in v28 ZIP"; find extracted -maxdepth 6 -type f; exit 1; }
           PACKAGE="com.example.fourbuttonpad"
@@ -123,8 +123,8 @@ jobs:
                   applicationId = "com.example.fourbuttonpad"
                   minSdk = 23
                   targetSdk = 35
-                  versionCode = 28
-                  versionName = "0.28"
+                  versionCode = 29
+                  versionName = "0.28.2"
               }
               signingConfigs {
                   create("release") {
@@ -179,7 +179,7 @@ jobs:
           printf '\nandroid.useAndroidX=true\norg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8\n' >> "$PROJECT_DIR/gradle.properties"
           find "$PROJECT_DIR/app/src/main/res" -type f -name '*.xml' -print0 | xargs -0 -r sed -i -E 's/[[:space:]]+android:pathType="[^"]*"//g'
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-      - name: Build signed release APK v28
+      - name: Build signed release APK v28(2)
         env:
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -191,11 +191,11 @@ jobs:
           mkdir -p apk
           APK="$(find "$PROJECT_DIR" -type f -name "*.apk" -path "*/build/outputs/*" -print -quit)"
           test -n "$APK" || { echo "APK not found"; exit 1; }
-          cp "$APK" apk/KuroAssistant_v28.apk
-          ls -lh apk/KuroAssistant_v28.apk
+          cp "$APK" apk/KuroAssistant_v28_2.apk
+          ls -lh apk/KuroAssistant_v28_2.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: KuroAssistant-v28-signed-APK
-          path: apk/KuroAssistant_v28.apk
+          name: KuroAssistant-v28-2-signed-APK
+          path: apk/KuroAssistant_v28_2.apk
           if-no-files-found: error
           retention-days: 14
