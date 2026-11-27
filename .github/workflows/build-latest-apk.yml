@@ -106,7 +106,7 @@ jobs:
           python3 - "$SOURCE" <<'PY'
           import pathlib,sys
           p=pathlib.Path(sys.argv[1]); s=p.read_text()
-          valid=set("tbnr'"\"\\$u")
+          valid=set(map(chr,[116,98,110,114,39,34,92,36,117]))
           out=[]; i=0; state="code"; changed=[]
           while i<len(s):
               c=s[i]; n=s[i+1] if i+1<len(s) else ""
@@ -131,7 +131,7 @@ jobs:
               if state=="string":
                   if c=="\\":
                       if n and n not in valid:
-                          out.append("\\\\"); changed.append(s.count("\n",0,i)+1)
+                          out.extend(("\\\\",n)); changed.append(s.count("\\n",0,i)+1); i+=2; continue
                       out.append(c); i+=1
                       if i<len(s): out.append(s[i]); i+=1
                       continue
