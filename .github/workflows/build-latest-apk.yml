@@ -38,10 +38,10 @@ jobs:
             echo "::error::Timestamp exceeds Android versionCode limit"; exit 1
           fi
           BASE="$(basename "$SOURCE_ZIP")"
-          if [[ "$BASE" =~ [vV]([_-]?)([0-9]+)\.([0-9]+) ]]; then
-            VERSION_NAME="${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
-          elif [[ "$BASE" =~ [vV]([_-]?)([0-9]+) ]]; then
-            VERSION_NAME="0.${BASH_REMATCH[2]}"
+          if [[ "$BASE" =~ [vV][_-]?([0-9]+)[._-]([0-9]+) ]]; then
+            VERSION_NAME="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+          elif [[ "$BASE" =~ [vV][_-]?([0-9]+) ]]; then
+            VERSION_NAME="0.${BASH_REMATCH[1]}"
           else
             VERSION_NAME="$(date -u -d "@$ADD_TIMESTAMP" +%Y.%m.%d.%H%M)"
           fi
@@ -161,6 +161,17 @@ jobs:
               s=s[:target.start()]+block+"\n\n"+s[target.start():]
               print("Moved Compose state before local function.")
           p.write_text(s)
+          PY
+          python3 - "$SOURCE" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          if "graphicsLayer(" in s and "import androidx.compose.ui.graphics.graphicsLayer" not in s:
+              lines=s.splitlines(True)
+              i=next((i for i,line in enumerate(lines) if line.startswith("package ")),None)
+              if i is None: raise SystemExit("Package declaration not found")
+              lines.insert(i+1,"\\nimport androidx.compose.ui.graphics.graphicsLayer\\n")
+              p.write_text("".join(lines))
+              print("Added graphicsLayer import.")
           PY
           python3 - "$SOURCE" <<'PY'
           import pathlib,sys
