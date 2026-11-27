@@ -67,9 +67,7 @@ once(
 )
 
 # Replace the old two-button movement row with a direct position slider.
-start = s.find('        Row(\n', s.find('text = "◄ Влево"') - 2500)
-if start < 0:
-    start = s.rfind('        Row(\n', 0, s.find('text = "◄ Влево"'))
+start = s.rfind('        Row(\n', 0, s.find('text = "◄ Влево"'))
 end_anchor = '                text = "Вправо ►"'
 right = s.find(end_anchor)
 if start < 0 or right < 0:
