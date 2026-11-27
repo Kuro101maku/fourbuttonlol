@@ -241,35 +241,46 @@ jobs:
             exit 1
           fi
 
-      - name: Restore missing rest-session state fields in v16 source
+      - name: Move rest-session state before local functions in v16 source
         shell: bash
         run: |
           SOURCE="$(find "$PROJECT_DIR/app/src/main/java" -type f -name 'MainActivity.kt' -print -quit)"
-          if [ -z "$SOURCE" ]; then
-            echo "MainActivity.kt not found for rest-state compatibility patch."
-            exit 1
-          fi
           python3 - "$SOURCE" <<'PY'
-          import pathlib, re, sys
+          import pathlib, sys
           path = pathlib.Path(sys.argv[1])
-          source = path.read_text()
-          fields = {
-              "restEnteredAtMs": "private var restEnteredAtMs: Long = 0L",
-              "restIdleNotifiedForSession": "private var restIdleNotifiedForSession: Boolean = false",
-          }
-          missing = [decl for name, decl in fields.items() if not re.search(r'\b(?:var|val)\s+' + re.escape(name) + r'\b', source)]
-          if missing:
-              match = re.search(r'(class\s+MainActivity\b[^\{]*\{)', source)
-              if not match:
-                  raise SystemExit("Could not locate MainActivity class to add missing rest-session fields.")
-              source = source[:match.end()] + "\n    " + "\n    ".join(missing) + source[match.end():]
-              path.write_text(source)
-          print("Rest-session fields present:", ", ".join(fields))
+          lines = path.read_text().splitlines(keepends=True)
+          def locate(prefix):
+              for i, line in enumerate(lines):
+                  if line.lstrip().startswith(prefix):
+                      return i
+              return -1
+          i = locate("var restEnteredAtMs by remember")
+          j = locate("var restIdleNotifiedForSession by remember")
+          target = locate("fun ensureRestModeSupportsTimer")
+          if min(i, j, target) < 0:
+              raise SystemExit("Could not locate rest-state declarations or their enclosing local functions.")
+          indent = lines[i][:len(lines[i])-len(lines[i].lstrip())]
+          depth = 0
+          end = i
+          started = False
+          while end < len(lines):
+              line = lines[end]
+              depth += line.count("{") - line.count("}")
+              started = started or "{" in line
+              if started and depth == 0:
+                  end += 1
+                  break
+              end += 1
+          rest_entered = lines[i:end]
+          rest_idle = lines[j:j+1]
+          for index in sorted(list(range(i,end)) + [j], reverse=True):
+              del lines[index]
+          target = locate("fun ensureRestModeSupportsTimer")
+          lines[target:target] = rest_entered + rest_idle + ["\n"]
+          path.write_text("".join(lines))
+          print("Moved remember-state declarations before local function definitions.")
           PY
-          grep -n -E 'restEnteredAtMs|restIdleNotifiedForSession' "$SOURCE"
-          echo "---- MainActivity context 680-830 ----"
-          nl -ba "$SOURCE" | sed -n '680,830p'
-
+          grep -n -E 'restEnteredAtMs|restIdleNotifiedForSession|ensureRestModeSupportsTimer' "$SOURCE"
       - name: Build debug APK
         run: |
           cd "$PROJECT_DIR"
